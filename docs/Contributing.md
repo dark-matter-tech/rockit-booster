@@ -6,9 +6,9 @@
 
 | Branch | Purpose |
 |--------|---------|
-| `master` | Stable releases. Tagged with version numbers. |
 | `develop` | Active development. PRs merge here. |
-| `staging` | Pre-release testing. Merges from develop, merges to master. |
+| `master` | Testing and integration. Merges from develop. |
+| `staging` | Production. Merges from master. Tagged with version numbers. Triggers releases. |
 | `feature/*` | Feature branches. Branch from develop, PR back to develop. |
 | `fix/*` | Bug fix branches. Same flow as feature branches. |
 
@@ -24,11 +24,11 @@
 
 ### Release Process
 
-1. Merge `develop` → `staging` for testing
-2. Run full test suite + bootstrap verification on staging
-3. Merge `staging` → `master`
+1. Merge `develop` → `master` for testing and integration
+2. Run full test suite + bootstrap verification on master
+3. Merge `master` → `staging` for production release
 4. Tag with version: `git tag v0.1.1`
-5. CI builds release artifacts automatically
+5. CI builds release artifacts automatically (triggered by staging)
 
 ## Coding Standards
 
