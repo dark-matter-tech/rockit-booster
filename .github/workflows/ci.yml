@@ -2,43 +2,65 @@ name: CI
 
 on:
   push:
-    branches: [develop, master]
   pull_request:
-    branches: [master]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [develop, beta, master, staging]
 
 jobs:
   linux:
-    name: Linux (Ubuntu 22.04, Swift 5.10)
+    name: Linux x86_64
     runs-on: ubuntu-22.04
     container: swift:5.10.1-jammy
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
-          apt-get update -q
-          apt-get install -y -q libssl-dev pkg-config
+          apt-get update && apt-get install -y --no-install-recommends git libssl-dev pkg-config
+          apt-get clean && rm -rf /var/lib/apt/lists/*
 
       - name: Checkout
-        uses: actions/checkout@v4
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          echo "machine ${GITHUB_SERVER_URL#https://} login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc
+          chmod 600 ~/.netrc
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          git clone --depth 1 --branch "${BRANCH}" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" .
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Build (release)
         run: swift build -c release
 
-      - name: Test
+      - name: Run tests
         run: swift test
 
-  macos:
-    name: macOS (ARM64)
-    runs-on: macos-14
+  notify-integration:
+    name: Trigger integration tests
+    runs-on: ubuntu-22.04
+    needs: [linux]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging')
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Dispatch to rockit-lang
+        run: |
+          curl -s -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_PAT}" \
+            https://api.github.com/repos/dark-matter-tech/rockit-lang/dispatches \
+            -d "{\"event_type\":\"integration-test\",\"client_payload\":{\"repo\":\"rockit-booster\",\"ref\":\"${GITHUB_REF_NAME}\"}}"
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+
+  macos:
+    name: macOS arm64
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Build (release)
         run: swift build -c release
 
-      - name: Test
+      - name: Run tests
         run: swift test
